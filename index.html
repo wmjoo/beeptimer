@@ -47,7 +47,7 @@
 
         <label class="field">
           <span>간격 n(초):</span>
-          <input id="inpN" type="number" min="1" max="60" step="1" value="15" />
+          <input id="inpN" type="number" min="1" max="60" step="1" value="60" />
         </label>
 
         <label class="field">
@@ -97,8 +97,8 @@
         <div>
           <div class="hint" style="margin-bottom:4px;">파형 (Timbre)</div>
           <select id="selWave">
-            <option value="sine">sine (부드러움)</option>
             <option value="square">square (뚜렷함)</option>
+            <option value="sine">sine (부드러움)</option>
             <option value="triangle">triangle (밝음)</option>
             <option value="sawtooth">sawtooth (날카로움)</option>
           </select>
@@ -106,9 +106,9 @@
         <div>
           <div class="hint" style="margin-bottom:4px;">비프 패턴</div>
           <select id="selPattern">
-            <option value="double">더블 비프 (기본)</option>
+            <option value="long">장음 1회</option>            
+            <option value="double">더블 비프</option>
             <option value="triple">트리플 비프</option>
-            <option value="long">장음 1회</option>
             <option value="rise">상승 2음</option>
             <option value="fall">하강 2음</option>
           </select>
