@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Beep Timer Pro v3 — n,2n,… @ :00 / 패턴 선택 / 볼륨조절</title>
+<title>비프 타이머</title>
 <style>
   :root { color-scheme: light dark; }
   * { box-sizing: border-box; }
@@ -47,7 +47,7 @@
 
         <label class="field">
           <span>간격 n(초):</span>
-          <input id="inpN" type="number" min="1" max="60" step="1" value="60" />
+          <input id="inpN" type="number" min="1" max="60" step="1" value="15" />
         </label>
 
         <label class="field">
@@ -97,18 +97,18 @@
         <div>
           <div class="hint" style="margin-bottom:4px;">파형 (Timbre)</div>
           <select id="selWave">
-            <option value="square">square (뚜렷함)</option>
             <option value="sine">sine (부드러움)</option>
-            <option value="triangle">triangle (밝음)</option>
+            <option value="square" selected>square (뚜렷함)</option>
+            <option value="triangle">triangle (brightness)</option>
             <option value="sawtooth">sawtooth (날카로움)</option>
           </select>
         </div>
         <div>
           <div class="hint" style="margin-bottom:4px;">비프 패턴</div>
           <select id="selPattern">
-            <option value="long">장음 1회</option>            
             <option value="double">더블 비프</option>
             <option value="triple">트리플 비프</option>
+            <option value="long" selected>장음 1회 (기본)</option>
             <option value="rise">상승 2음</option>
             <option value="fall">하강 2음</option>
           </select>
@@ -131,7 +131,8 @@
     if (audioCtx.state === "suspended") audioCtx.resume();
   }
 
-  const audioCfg = { volume: 0.8, wave: "sine", pattern: "double" };
+  // 기본값을 square + long 으로 변경
+  const audioCfg = { volume: 0.8, wave: "square", pattern: "long" };
 
   function tone({startTime, freq=900, ms=140, wave, gainVol}) {
     if (!audioCtx) return;
@@ -389,11 +390,11 @@
     }
   });
 
-  // 초기 UI
+  // 초기 UI 동기화 (DOM의 기본 선택값을 반영)
   volVal.textContent = volSlider.value;
   audioCfg.volume = volSlider.value / 100;
-  audioCfg.wave = selWave.value;
-  audioCfg.pattern = selPattern.value;
+  audioCfg.wave = document.getElementById("selWave").value;
+  audioCfg.pattern = document.getElementById("selPattern").value;
   recalcSchedule();
   setInterval(() => { clockEl.textContent = fmtClock(new Date()); }, 200);
 })();
