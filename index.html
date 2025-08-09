@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Beep Timer Pro v3 — n,2n,… @ :00 / 패턴 선택 / 볼륨조절</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Pretendard, sans-serif; margin:0; }
+  .container { max-width: 980px; margin: 0 auto; padding: 20px; }
+  .clock { font-size: 3rem; font-weight: 800; letter-spacing: .02em; text-align: center; margin: 6px 0 16px; font-variant-numeric: tabular-nums; }
+  .panel { border: 1px solid #bbb; border-radius: 12px; padding: 14px; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap: wrap; margin-bottom:10px; }
+  .btn { border:0; border-radius:10px; padding:10px 16px; cursor:pointer; font-weight:700; background:#1a73e8; color:#fff; }
+  .btn.secondary { background:#666; }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+  label.field { display:inline-flex; align-items:center; gap:6px; }
+  input[type="number"], select { padding: 8px 10px; border-radius: 8px; border: 1px solid #aaa; font-size: 0.98rem; }
+  input[type="number"] { width: 100px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .big { font-size: 1.9rem; font-weight: 800; }
+  .hint { color:#777; font-size:.9rem; }
+  .status { margin-top: 6px; }
+  .ok { color: #1b7f1b; } .warn { color:#b06b00; } .err { color:#b00020; }
+  .kv { display:grid; grid-template-columns: 140px 1fr; gap:8px 12px; align-items:center; }
+  .kv .label { color:#666; }
+
+  /* 하단 오디오 설정 */
+  .audio-panel { margin-top: 16px; }
+  .slider { width: 100%; }
+  .test-row { display:flex; gap:8px; }
+
+  /* 2열 1행 그리드 */
+  .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(180px, 1fr)); gap: 12px; }
+  @media (max-width: 700px) { .grid-2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div id="clock" class="clock mono">--:--:--</div>
+
+    <div class="panel">
+      <div class="row">
+        <button id="btnStart" class="btn">Start</button>
+        <button id="btnStop" class="btn secondary" disabled>Stop</button>
+
+        <label class="field">
+          <span>간격 n(초):</span>
+          <input id="inpN" type="number" min="1" max="60" step="1" value="15" />
+        </label>
+
+        <label class="field">
+          <input type="checkbox" id="chkAlign" checked />
+          <span>:00 정각에 동기화</span>
+        </label>
+
+        <label class="field">
+          <input type="checkbox" id="chkIncludeZero" />
+          <span>정각(0초)에도 울리기</span>
+        </label>
+
+        <label class="field">
+          <input type="checkbox" id="chkVisualBeep" checked />
+          <span>비프 시 화면 깜박임</span>
+        </label>
+      </div>
+
+      <div class="kv" style="margin-top:6px;">
+        <div class="label">다음 비프까지:</div>
+        <div id="countdown" class="mono big">-</div>
+
+        <div class="label">다음 비프 시각:</div>
+        <div id="nextTime" class="mono">-</div>
+
+        <div class="label">이번 분 비프 오프셋:</div>
+        <div id="offsets" class="mono hint">-</div>
+      </div>
+
+      <div id="status" class="status hint">대기 중</div>
+      <div class="hint" style="margin-top:8px;">※ 첫 실행은 <b>Start 버튼 클릭</b>이 필요합니다(브라우저 자동재생 정책). iPhone은 무음모드 해제.</div>
+    </div>
+
+    <!-- 🔊 오디오 설정: 볼륨 1행 + 파형/패턴 2열 1행 -->
+    <div class="panel audio-panel">
+      <h3 style="margin:6px 0 12px;">🔊 오디오 설정</h3>
+
+      <!-- 볼륨 -->
+      <div style="margin-bottom:12px;">
+        <div class="hint" style="margin-bottom:4px;">볼륨</div>
+        <input id="volSlider" class="slider" type="range" min="0" max="100" value="80" />
+        <div class="hint mono"><span id="volVal">80</span>%</div>
+      </div>
+
+      <!-- 파형 + 패턴: 2열 1행 -->
+      <div class="grid-2">
+        <div>
+          <div class="hint" style="margin-bottom:4px;">파형 (Timbre)</div>
+          <select id="selWave">
+            <option value="sine">sine (부드러움)</option>
+            <option value="square">square (뚜렷함)</option>
+            <option value="triangle">triangle (밝음)</option>
+            <option value="sawtooth">sawtooth (날카로움)</option>
+          </select>
+        </div>
+        <div>
+          <div class="hint" style="margin-bottom:4px;">비프 패턴</div>
+          <select id="selPattern">
+            <option value="double">더블 비프 (기본)</option>
+            <option value="triple">트리플 비프</option>
+            <option value="long">장음 1회</option>
+            <option value="rise">상승 2음</option>
+            <option value="fall">하강 2음</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="test-row" style="margin-top:10px;">
+        <button id="btnTest" class="btn">Beep Test</button>
+        <button id="btnResume" class="btn secondary">오디오 켜기</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  // ====== Audio Core ======
+  let audioCtx = null;
+  function ensureAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+  }
+
+  const audioCfg = { volume: 0.8, wave: "sine", pattern: "double" };
+
+  function tone({startTime, freq=900, ms=140, wave, gainVol}) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = wave || audioCfg.wave;
+    osc.frequency.value = freq;
+
+    const attack = 0.005, release = 0.09;
+    gain.gain.setValueAtTime(0.0001, startTime);
+    gain.gain.exponentialRampToValueAtTime(Math.max(Math.min(gainVol ?? audioCfg.volume, 1), 0), startTime + attack);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + ms/1000 + release);
+
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(startTime);
+    osc.stop(startTime + ms/1000 + release);
+  }
+
+  function playBeepPattern() {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    switch (audioCfg.pattern) {
+      case "double":
+        tone({startTime: now, freq: 900, ms: 140});
+        tone({startTime: now + 0.12, freq: 900, ms: 140});
+        break;
+      case "triple":
+        tone({startTime: now, freq: 920, ms: 120});
+        tone({startTime: now + 0.12, freq: 920, ms: 120});
+        tone({startTime: now + 0.24, freq: 920, ms: 120});
+        break;
+      case "long":
+        tone({startTime: now, freq: 700, ms: 380});
+        break;
+      case "rise":
+        tone({startTime: now, freq: 700, ms: 130});
+        tone({startTime: now + 0.12, freq: 980, ms: 160});
+        break;
+      case "fall":
+        tone({startTime: now, freq: 980, ms: 130});
+        tone({startTime: now + 0.12, freq: 700, ms: 160});
+        break;
+    }
+  }
+
+  function flash() {
+    const orig = document.body.style.backgroundColor;
+    document.body.style.backgroundColor = "rgba(255,235,59,0.35)";
+    setTimeout(()=>{ document.body.style.backgroundColor = orig || ""; }, 120);
+  }
+
+  // ====== DOM ======
+  const clockEl = document.getElementById("clock");
+  const btnStart = document.getElementById("btnStart");
+  const btnStop  = document.getElementById("btnStop");
+  const inpN     = document.getElementById("inpN");
+  const chkAlign = document.getElementById("chkAlign");
+  const chkIncludeZero = document.getElementById("chkIncludeZero");
+  const chkVisualBeep  = document.getElementById("chkVisualBeep");
+  const countdownEl = document.getElementById("countdown");
+  const nextTimeEl  = document.getElementById("nextTime");
+  const offsetsEl   = document.getElementById("offsets");
+  const statusEl    = document.getElementById("status");
+
+  const volSlider = document.getElementById("volSlider");
+  const volVal = document.getElementById("volVal");
+  const selWave = document.getElementById("selWave");
+  const selPattern = document.getElementById("selPattern");
+  const btnTest = document.getElementById("btnTest");
+  const btnResume = document.getElementById("btnResume");
+
+  // ====== Timer State ======
+  let running = false;
+  let uiTimerId = null;
+  let tickTimerId = null;
+  let minuteBaseTs = null;   // 이번 분의 :00(ms)
+  let scheduleOffsets = [];  // 이번 분 오프셋(ms)
+  let nextTs = null;
+  const PERIOD = 60_000;
+
+  // ====== Utils ======
+  const two = n => String(n).padStart(2, "0");
+  const fmtClock = d => `${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}`;
+  const fmtTime = ts => ts ? fmtClock(new Date(ts)) : "-";
+  function clampN(n){ if (Number.isNaN(n) || n < 1) return 1; if (n > 60) return 60; return n; }
+
+  function computeMinuteBase(nowMs) {
+    const d = new Date(nowMs);
+    d.setMilliseconds(0);
+    d.setSeconds(0);
+    return d.getTime(); // 항상 분의 0초
+  }
+
+  // includeZero 선택 시 0 포함
+  function buildOffsets(nSec, includeZero) {
+    const offs = [];
+    if (includeZero) offs.push(0);
+    const limit = Math.floor(59 / nSec);
+    for (let k=1; k<=limit; k++) offs.push(k * nSec);
+    return offs.map(s => s * 1000);
+  }
+
+  function recalcSchedule() {
+    const n = clampN(parseInt(inpN.value, 10));
+    scheduleOffsets = buildOffsets(n, chkIncludeZero.checked);
+    offsetsEl.textContent = scheduleOffsets.length
+      ? scheduleOffsets.map(ms => (ms/1000) + "s").join(", ")
+      : "(이번 분 울림 없음)";
+  }
+
+  // 현재 분의 남은 오프셋 중 ‘지금 이후’ 첫 비프를 사용
+  function findNextBeepTs(nowMs) {
+    const candidates = scheduleOffsets.map(off => minuteBaseTs + off).filter(ts => ts > nowMs).sort((a,b)=>a-b);
+    if (candidates.length) return candidates[0];
+    // 없으면 다음 분으로 넘겨 첫 오프셋
+    minuteBaseTs += PERIOD;
+    return scheduleOffsets.length ? (minuteBaseTs + scheduleOffsets[0]) : (minuteBaseTs + PERIOD + 1000);
+  }
+
+  // ====== Core Flow ======
+  function start() {
+    if (running) return;
+    ensureAudio();
+
+    inpN.value = clampN(parseInt(inpN.value, 10));
+    running = true;
+    btnStart.disabled = true;
+    btnStop.disabled  = false;
+
+    const now = Date.now();
+
+    // :00 기준으로 스케줄 구성, “현재 분의 남은 오프셋” 중 가장 가까운 것으로 즉시 시작
+    minuteBaseTs = computeMinuteBase(now);
+    recalcSchedule();
+
+    statusEl.textContent = chkAlign.checked
+      ? "실행 중 (:00 정각 기준 n,2n,…) — 현재 분의 남은 오프셋 즉시 반영"
+      : "실행 중 (:00 기준, 현재 분의 가장 가까운 오프셋부터 시작)";
+    statusEl.className = "status hint";
+
+    nextTs = findNextBeepTs(now);
+
+    clearInterval(uiTimerId);
+    uiTimerId = setInterval(updateUI, 200);
+    scheduleNext();
+  }
+
+  function stop() {
+    running = false;
+    clearTimeout(tickTimerId);
+    clearInterval(uiTimerId);
+    btnStart.disabled = false;
+    btnStop.disabled  = true;
+    countdownEl.textContent = "-";
+    nextTimeEl.textContent = "-";
+    statusEl.textContent = "정지";
+    statusEl.className = "status hint";
+  }
+
+  function scheduleNext() {
+    if (!running) return;
+    const now = Date.now();
+    let delay = Math.max(0, nextTs - now);
+    if (delay > PERIOD) delay = PERIOD; // 백그라운드 스로틀 대응
+    clearTimeout(tickTimerId);
+    tickTimerId = setTimeout(onTick, delay);
+    updateUI();
+  }
+
+  function onTick() {
+    if (!running) return;
+
+    playBeepPattern();
+    if (chkVisualBeep.checked) flash();
+
+    const now = Date.now();
+    // 이번 분의 다음 오프셋 찾고, 없으면 다음 분으로 롤오버
+    const remaining = scheduleOffsets.map(off => minuteBaseTs + off).filter(ts => ts > now).sort((a,b)=>a-b);
+    if (remaining.length) {
+      nextTs = remaining[0];
+    } else {
+      minuteBaseTs = computeMinuteBase(now + PERIOD);
+      recalcSchedule();
+      nextTs = scheduleOffsets.length ? (minuteBaseTs + scheduleOffsets[0]) : (minuteBaseTs + PERIOD + 1000);
+    }
+    scheduleNext();
+  }
+
+  function updateUI() {
+    const d = new Date();
+    clockEl.textContent = fmtClock(d);
+
+    if (!running) return;
+    const now = Date.now();
+    const remainMs = Math.max(0, nextTs - now);
+    const secs = Math.ceil(remainMs / 1000);
+    countdownEl.textContent = two(secs) + " s";
+    nextTimeEl.textContent = fmtTime(nextTs);
+  }
+
+  // ====== Events ======
+  btnStart.addEventListener("click", start);
+  btnStop.addEventListener("click", stop);
+
+  inpN.addEventListener("change", () => {
+    inpN.value = clampN(parseInt(inpN.value, 10));
+    recalcSchedule();
+    if (running) {
+      const now = Date.now();
+      nextTs = findNextBeepTs(now); // 변경 즉시 반영
+      scheduleNext();
+      statusEl.textContent = "간격 변경: 현재 분의 남은 오프셋을 기준으로 즉시 반영";
+    }
+  });
+
+  chkIncludeZero.addEventListener("change", () => {
+    recalcSchedule();
+    if (running) {
+      const now = Date.now();
+      nextTs = findNextBeepTs(now);
+      scheduleNext();
+      statusEl.textContent = "정각 포함 여부 변경: 현재 분 기준으로 즉시 반영";
+    }
+  });
+
+  chkAlign.addEventListener("change", () => {
+    // v3에서도 :00 기준은 동일 유지, 현재 분 즉시 반영 방식 유지
+    statusEl.textContent = running
+      ? "정각 동기화 옵션 변경됨 (현 분 기준 유지)"
+      : "대기 중";
+  });
+
+  // 오디오 설정
+  volSlider.addEventListener("input", () => {
+    volVal.textContent = volSlider.value;
+    audioCfg.volume = Math.max(0, Math.min(1, volSlider.value / 100));
+  });
+  selWave.addEventListener("change", () => { audioCfg.wave = selWave.value; });
+  selPattern.addEventListener("change", () => { audioCfg.pattern = selPattern.value; });
+  btnTest.addEventListener("click", () => { ensureAudio(); playBeepPattern(); });
+  btnResume.addEventListener("click", () => { ensureAudio(); });
+
+  // 탭 복귀 시 드리프트 보정
+  document.addEventListener("visibilitychange", () => {
+    if (!running) return;
+    const now = Date.now();
+    if (now - nextTs > PERIOD) {
+      minuteBaseTs = computeMinuteBase(now);
+      recalcSchedule();
+      nextTs = findNextBeepTs(now);
+      scheduleNext();
+    } else {
+      scheduleNext();
+    }
+  });
+
+  // 초기 UI
+  volVal.textContent = volSlider.value;
+  audioCfg.volume = volSlider.value / 100;
+  audioCfg.wave = selWave.value;
+  audioCfg.pattern = selPattern.value;
+  recalcSchedule();
+  setInterval(() => { clockEl.textContent = fmtClock(new Date()); }, 200);
+})();
+</script>
+</body>
+</html>
